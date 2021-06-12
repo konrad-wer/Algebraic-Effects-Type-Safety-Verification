@@ -4,7 +4,6 @@ From AlgEffects Require Import Maps.
 From Coq Require Import Bool.Bool.
 From Coq Require Import Sets.Uniset.
 
-
 Module Calculus.
 
 Inductive computationType : Type :=
@@ -29,6 +28,10 @@ with valueExpr : Type :=
   | VHandler (x : string) (cr : computation) (op : opCase)
 with opCase : Type :=
   | OpCase (op : string) (x : string) (k : string) (e : computation).
+
+Scheme computation_mut := Induction for computation Sort Prop
+with valueExpr_mut := Induction for valueExpr Sort Prop
+with opCase_mut := Induction for opCase Sort Prop.
 
 Fixpoint subst
   (x : string) (s : valueExpr) (t : computation) :=
@@ -116,25 +119,17 @@ Inductive step : total_map (valueType * valueType) -> computation -> computation
   | ST_HandleOpNotEqual : forall E op1 op2 v y c xr cr x k ch,
     value v ->
     op1 <> op2 ->
-    E \ CHandle (COp op1 v y c) (VHandler xr cr (OpCase op1 x k ch)) -->
-    COp op1 v y (CHandle c (VHandler xr cr (OpCase op1 x k ch)))
+    E \ CHandle (COp op1 v y c) (VHandler xr cr (OpCase op2 x k ch)) -->
+    COp op1 v y (CHandle c (VHandler xr cr (OpCase op2 x k ch)))
 
 where "E '\' t '-->' t'" := (step E t t').
 
 Definition context := partial_map valueType.
 
-Reserved Notation "E '\' Gamma '||-' c '\in' T" (at level 10).
+Reserved Notation "E '\' Gamma '||-' c '\in' T" (at level 40).
 
-Reserved Notation "E '\' Gamma '|-' v '\in' T" (at level 10).
+Reserved Notation "E '\' Gamma '|-' v '\in' T" (at level 40).
 
-(* 
-Lemma string_eq_binary : forall x y : string, {x = y} + {x <> y}.
-Proof with auto.
-  intros.
-  destruct (eqb_stringP x y).
-  - left...
-  - right...
-Qed. *)
 
 Definition set_remove (x : string) (s : uniset string) :=
   Charac (fun y:string => if eqb_string x y then false else (charac s x)).
@@ -177,17 +172,22 @@ with has_type_valueExpr : total_map (valueType * valueType) -> context -> valueE
       E \ Gamma |- VTrue \in BoolType
   | T_False : forall E Gamma,
       E \ Gamma |- VFalse \in BoolType
-  | T_Abs : forall E Gamma x T1 T2 c,
+  | T_Fun : forall E Gamma x T1 T2 c,
       E \ x |-> T2 ; Gamma ||- c \in T1 ->
       E \ Gamma |- VFun x T2 c \in (FunType T2 T1)
-  | T_Handler : forall E xr cr op x k c T1 T2 A B Gamma Delta Delta',
+  | T_Handler : forall E xr cr op x k c A B Gamma Delta Delta',
       E \ xr |-> A ; Gamma ||- cr \in (ComputationType B Delta') ->
-      E op = (T1, T2) ->
-      E \ x |-> T1 ; k |-> FunType T2 (ComputationType B Delta') ; Gamma ||-
-         c \in (ComputationType B Delta') ->
+      has_type_opCase E Gamma (OpCase op x k c) (ComputationType B Delta') ->
       incl (set_remove op Delta) Delta' ->
       E \ Gamma |- VHandler xr cr (OpCase op x k c) \in 
         (HandlerType (ComputationType A Delta) (ComputationType B Delta'))
 
-where "E '\' Gamma '|-' v '\in' T" := (has_type_valueExpr E Gamma v T).
+where "E '\' Gamma '|-' v '\in' T" := (has_type_valueExpr E Gamma v T)
+
+with has_type_opCase : total_map (valueType * valueType) -> context -> opCase -> computationType -> Prop :=
+  | T_OpCase : forall E x op k T1 T2 T Gamma c,
+      E op = (T1, T2) ->
+      E \ x |-> T1 ; k |-> FunType T2 T ; Gamma ||- c \in T ->
+      has_type_opCase E Gamma (OpCase op x k c) T.
+
 End Calculus.
