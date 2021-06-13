@@ -8,7 +8,6 @@ Import Calculus.
 
 Lemma canonical_forms_bool : forall E v,
   E \ empty |- v \in BoolType ->
-  value v ->
   v = VTrue \/ v = VFalse.
 Proof with auto.
   intros.
@@ -20,7 +19,6 @@ Qed.
 
 Lemma canonical_forms_fun : forall E v T1 T2,
   E \ empty |- v \in (FunType T1 T2) ->
-  value v ->
   exists x c, v = VFun x T1 c.
 Proof with eauto.
   intros.
@@ -30,7 +28,6 @@ Qed.
 
 Lemma canonical_forms_handler : forall E v T1 T2,
   E \ empty |- v \in (HandlerType T1 T2) ->
-  value v ->
   exists xr cr opCase, v = VHandler xr cr opCase.
 Proof with eauto.
   intros.
@@ -40,34 +37,32 @@ Qed.
 
 Theorem progress : forall E c T,
   E \ empty ||- c \in T ->
-  (exists v, c = (CReturn) v /\ value v) \/
-  (exists op v y c', c = COp op v y c' /\ value v) \/
+  (exists v, c = CReturn v) \/
+  (exists op v y c', c = COp op v y c') \/
   exists c', (E \ c --> c').
-Proof.
+Proof with eauto.
   intros E C T Ht.
   remember empty as Gamma.
-  induction Ht; subst Gamma; auto.
+  induction Ht; subst Gamma...
   - inversion H; subst.
     + discriminate.
     + inversion H0; subst; try discriminate; right; right; eexists; constructor; constructor.
   - inversion H; subst; try discriminate; right; right; eexists; constructor.
-  - inversion H; subst; try discriminate; left; eexists; 
-    split; try reflexivity; constructor.
   - inversion H0; subst; try discriminate; right; left;
     eexists; eexists; eexists; eexists; split; try reflexivity; constructor.
   - destruct IHHt1; subst; try reflexivity; right; right.
-    + destruct H as (v & H1 & H2). subst. eexists. apply ST_DoReturn. auto.
+    + destruct H as [v H]. subst. eexists. apply ST_DoReturn.
     + destruct H.
-      * destruct H as (op & v & y & c' & H1 & H2). subst. eexists. apply ST_DoOp. auto.
-      * destruct H as [c' H]. eexists. apply ST_Do1. apply H.
+      * destruct H as (op & v & y & c' & H). subst. eexists. apply ST_DoOp.
+      * destruct H as [c' H]. eexists. apply ST_Do1...
  - destruct IHHt; try reflexivity; right; right; inversion H; subst; try discriminate.
-  + destruct H0 as (v & H1 & H2). subst. eexists. apply ST_HandleReturn. auto.
+  + destruct H0 as [v H0]. subst. eexists. apply ST_HandleReturn.
   + destruct H0.
-    * destruct H0 as (op' & v & y & c' & H1 & H2); inversion H7; subst.
+    * destruct H0 as (op' & v & y & c' & H0); inversion H7; subst.
       destruct (eqb_stringP op op'); subst.
-      -- eexists. subst. apply ST_HandleOpEqual. auto.
-      -- eexists. apply ST_HandleOpNotEqual; auto.
-    * destruct H0 as [c' H0]. eexists. apply ST_Handle1. eauto.
+      -- eexists. subst. apply ST_HandleOpEqual.
+      -- eexists. apply ST_HandleOpNotEqual...
+    * destruct H0 as [c' H0]. eexists. apply ST_Handle1...
 Qed.
 
 Lemma weakening : forall v E Gamma Gamma' T,
@@ -75,7 +70,7 @@ Lemma weakening : forall v E Gamma Gamma' T,
   E \ Gamma  |- v \in T  ->
   E \ Gamma' |- v \in T.
 Proof with eauto.
-  apply (valueExpr_mut (fun c => forall E Gamma Gamma' T,
+  apply (value_mut (fun c => forall E Gamma Gamma' T,
       inclusion Gamma Gamma' ->
       E \ Gamma  ||- c \in T  ->
       E \ Gamma' ||- c \in T)
@@ -120,7 +115,7 @@ Proof.
   intros E Gamma c T.
   eapply weakening.
   discriminate.
-Qed. 
+Qed.
 
 
 Lemma weakening_computation : forall c E Gamma Gamma' T,
@@ -151,7 +146,7 @@ Proof with eauto.
     (fun v => forall E Gamma x U v' T,
       E \ x |-> U ; Gamma |- v \in T ->
       E \ empty |- v' \in U   ->
-      E \ Gamma |- subst_in_valueExpr x v' v \in T)
+      E \ Gamma |- subst_in_value x v' v \in T)
     (fun opCase => forall E Gamma x U v op T,
       has_type_opCase E (x |-> U ; Gamma) op opCase T ->
       E \ empty |- v \in U   ->
@@ -213,7 +208,6 @@ Proof with eauto.
   - rewrite -> H0 in H1. inversion H1...
 Qed.
 
-
 Theorem preservation : forall E c c' T,
   E \ empty ||- c \in T  ->
   E \ c --> c'  ->
@@ -242,19 +236,17 @@ Proof with eauto using inclusion_empty_in_any.
     + econstructor...
     + inversion H. subst. eapply substitution_preserves_typing...
       inversion HT...
-    + inversion H. inversion HT. inversion H10. subst.
+    + inversion H. inversion HT. inversion H9. subst.
       eapply substitution_preserves_typing...
-      * eapply substitution_preserves_typing... 
-        rewrite H18 in H31. injection H31 as H31. subst...
-      * rewrite H31. rewrite H18 in H31. injection H31 as H31. simpl. 
-        subst. constructor. econstructor.
-        -- apply H22.
-        -- injection H19 as H19. subst. apply weakening with (Gamma := empty)...
-   + inversion H. subst. inversion HT. subst. inversion H11. subst. 
+      * eapply substitution_preserves_typing...
+        rewrite H17 in H30. injection H30 as H30. subst...
+      * rewrite H30. rewrite H17 in H30. injection H30 as H30. simpl. 
+        subst. constructor. econstructor...
+        injection H18 as H18. subst. apply weakening with (Gamma := empty)...
+   + inversion H. subst. inversion HT. subst. inversion H10. subst. 
       econstructor...
-     * unfold incl in H12. 
-       eapply set_remove_neq_incl...
-     *  econstructor... apply weakening with (Gamma := empty)...
+     * eapply set_remove_neq_incl...
+     * econstructor... apply weakening with (Gamma := empty)...
 Qed.
 
 Corollary safety : forall E c T Delta,
@@ -265,8 +257,8 @@ Corollary safety : forall E c T Delta,
 Proof with eauto 7.
   intros. apply progress in H as H'. destruct H' as [[v H1] | H23]; 
   try destruct H23 as [H2 | H3].
-  - left. exists v. destruct H1 as [H1 H1']. subst. inversion H. subst...
-  - right. left. destruct H2 as (op & v & y & c' & H1 & H1'). subst. inversion H. 
+  - left. exists v. subst. inversion H. subst...
+  - right. left. destruct H2 as (op & v & y & c' & H2). subst. inversion H. 
     subst...
   - right. right. destruct H3 as [c' H3]. exists c'. split...
     eapply preservation...
