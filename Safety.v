@@ -22,22 +22,20 @@ Lemma canonical_forms_fun : forall E v T1 T2,
   E \ empty |- v \in (FunType T1 T2) ->
   value v ->
   exists x c, v = VFun x T1 c.
-Proof.
+Proof with eauto.
   intros.
-  inversion H. subst.
+  inversion H; subst...
   - inversion H0.
-  - subst. eexists. eexists. reflexivity.
 Qed.
 
 Lemma canonical_forms_handler : forall E v T1 T2,
   E \ empty |- v \in (HandlerType T1 T2) ->
   value v ->
   exists xr cr opCase, v = VHandler xr cr opCase.
-Proof.
+Proof with eauto.
   intros.
-  inversion H. subst.
+  inversion H; subst...
   - inversion H0.
-  - subst. eexists. eexists. eexists. reflexivity.
 Qed.
 
 Theorem progress : forall E c T,
@@ -72,13 +70,11 @@ Proof.
     * destruct H0 as [c' H0]. eexists. apply ST_Handle1. eauto.
 Qed.
 
-Search "inclusion_update".
-
 Lemma weakening : forall v E Gamma Gamma' T,
   inclusion Gamma Gamma' ->
   E \ Gamma  |- v \in T  ->
   E \ Gamma' |- v \in T.
-Proof.
+Proof with eauto.
   apply (valueExpr_mut (fun c => forall E Gamma Gamma' T,
       inclusion Gamma Gamma' ->
       E \ Gamma  ||- c \in T  ->
@@ -91,47 +87,30 @@ Proof.
       inclusion Gamma Gamma' ->
       has_type_opCase E Gamma op opCase T ->
       has_type_opCase E Gamma' op opCase T)); intros; subst.
-  - inversion H1. subst. constructor. apply H with (Gamma := Gamma); assumption.
+
+  - inversion H1. subst. constructor. apply H with (Gamma := Gamma)...
   - inversion H2. subst. apply T_Op with (T1 := T1) (T2 := T2) (Delta := Delta);
-    try eapply H; eauto.
-    + eapply H0.
-      * apply inclusion_update. apply H1.
-      * auto.
-  - inversion H2. subst. eapply T_Do.
-    + eapply H.
-      * apply H1.
-      * apply H9.
-    + eapply H0.
-      * apply inclusion_update. apply H1.
-      * apply H10.
-  - inversion H3. subst. apply T_If.
-    + eapply H. apply H2. apply H9.
-    + eapply H0. apply H2. apply H11.
-    + eapply H1. apply H2. apply H12.
-  - inversion H2. subst. eapply T_App.
-    + eapply H. apply H1. apply H7.
-    + eapply H0. apply H1. apply H9.
-  - inversion H2. subst. eapply T_Handle.
-    + eapply H. apply H1. apply H7.
-    + eapply H0. apply H1. auto.
-  - inversion H0. subst. apply T_Var. auto.
+    try eapply H...
+    + eapply H0...
+      * apply inclusion_update...
+  - inversion H2. subst. eapply T_Do...
+    + eapply H0...
+      * apply inclusion_update...
+  - inversion H3. subst. apply T_If...
+  - inversion H2. subst. eapply T_App...
+  - inversion H2. subst. eapply T_Handle; eauto.
+  - inversion H0. subst. apply T_Var...
   - inversion H0. constructor.
   - inversion H0. constructor.
   - inversion H1. subst. apply T_Fun. eapply H. 
-    + apply inclusion_update. apply H0.
+    + apply inclusion_update...
     + auto.
-  - inversion H2. subst. eapply T_Handler.
-    + eapply H. 
-      * apply inclusion_update. apply H1.
-      * auto.
-    + eapply H0. apply H1. apply H10.
-    + auto.
-  - inversion H1. subst. eapply T_OpCase. 
-    + apply H10.
-    + auto.
-    + eapply H.
-      * repeat (apply inclusion_update). apply H0.
-      * auto.
+  - inversion H2. subst. eapply T_Handler...
+    + eapply H...
+      * apply inclusion_update...
+  - inversion H1. subst. eapply T_OpCase; eauto. 
+    + eapply H; eauto.
+      * repeat (apply inclusion_update)...
 Qed.
 
 Lemma weakening_empty : forall E Gamma v T,
@@ -143,11 +122,28 @@ Proof.
   discriminate.
 Qed. 
 
+
+Lemma weakening_computation : forall c E Gamma Gamma' T,
+  inclusion Gamma Gamma' ->
+  E \ Gamma  ||- c \in T  ->
+  E \ Gamma' ||- c \in T.
+Proof with eauto using weakening.
+  intros c E Gamma Gamma' T Hi Ht.
+  generalize dependent Gamma'.
+  induction Ht; intros; subst.
+  - eapply T_App...
+  - eapply T_If...
+  - eapply T_Return...
+  - eapply T_Op... apply IHHt... apply inclusion_update...
+  - eapply T_Do... apply IHHt2... apply inclusion_update...
+  - eapply T_Handle...
+Qed.
+
 Lemma substitution_preserves_typing : forall c E Gamma x U v T,
   E \ x |-> U ; Gamma ||- c \in T ->
   E \ empty |- v \in U   ->
   E \ Gamma ||- subst x v c \in T.
-Proof.
+Proof with eauto.
    apply (computation_mut (fun c => forall E Gamma x U v T,
       E \ x |-> U ; Gamma ||- c \in T ->
       E \ empty |- v \in U   ->
@@ -160,61 +156,89 @@ Proof.
       has_type_opCase E (x |-> U ; Gamma) op opCase T ->
       E \ empty |- v \in U   ->
       has_type_opCase E Gamma op (subst_in_opCase x v opCase) T)); intros; subst; simpl.
-  - inversion H0. subst. eapply H in H5. 
-    + eapply T_Return in H5. apply H5.
-    + auto.
-  - inversion H1. subst. destruct (eqb_stringP x0 x); eapply H in H2 as H2'.
-    + eapply T_Op. apply H9. apply H2'. apply H12. 
-      subst. rewrite update_shadow in H13. auto.
-    + auto.
-    + eapply T_Op. apply H9. apply H2'. apply H12. subst.
-      rewrite update_permute in H13; auto. eapply H0 in H13.
-      apply H13. assumption.
-    + auto.
-  - inversion H1. destruct (eqb_stringP x0 x); subst; eapply H in H2 as H2'.
-    + eapply T_Do. eapply H in H9.
-      apply H9. auto. rewrite update_shadow in H10. auto.
-    + apply H9.
-    + eapply T_Do. apply H2'. rewrite update_permute in H10; auto.
-      eapply H0. apply H10. apply H2.
-    + apply H9.
-  - inversion H2. subst. constructor.
-    + eapply H. apply H9. apply H3.
-    + eapply H0. apply H11. apply H3.
-    + eapply H1. apply H12. apply H3.
-  - inversion H1. subst. eapply T_App.
-    + eapply H. apply H7. auto.
-    + eapply H0. apply H9. auto.
-  - inversion H1. subst. econstructor.
-    + eapply H. apply H7. auto.
-    + eapply H0. apply H9. auto.
+  - inversion H0. subst. eapply H in H5...
+    + eapply T_Return in H5...
+  - inversion H1. subst. destruct (eqb_stringP x0 x); eapply H in H2 as H2'...
+    + eapply T_Op... subst. rewrite update_shadow in H13...
+    + eapply T_Op...
+      rewrite update_permute in H13...
+  - inversion H1. destruct (eqb_stringP x0 x); subst; eapply H in H2 as H2'...
+    + eapply T_Do. eapply H in H9... rewrite update_shadow in H10...
+    + eapply T_Do... rewrite update_permute in H10...
+  - inversion H2. subst. constructor...
+  - inversion H1. subst. eapply T_App...
+  - inversion H1. subst. econstructor...
   - inversion H. destruct (eqb_stringP x0 x); subst.
     + apply weakening_empty. rewrite update_eq in H4. 
-      injection H4 as H4. subst. auto.
-    + rewrite update_neq in H4. constructor. auto. auto.
+      injection H4 as H4. subst...
+    + rewrite update_neq in H4... constructor...
   - inversion H. subst. constructor.
   - inversion H. subst. constructor.
   - inversion H0. destruct (eqb_stringP x0 x); subst; constructor.
     + rewrite update_shadow in H8. auto.
-    + eapply H. rewrite update_permute in H8. apply H8. auto. auto.
+    + eapply H... rewrite update_permute in H8...
   - inversion H1. destruct (eqb_stringP x0 x); subst.
-    + econstructor. 
-      * rewrite update_shadow in H8. auto.
-      * eapply H0. apply H10. apply H2.
-      * auto.
-    + econstructor. 
-      * rewrite update_permute in H8. eapply H in H8. apply H8. auto. auto.
-      * eapply H0. apply H10. auto.
-      * auto.
+    + econstructor... rewrite update_shadow in H8...
+    + econstructor...
+      * rewrite update_permute in H8...
   - inversion H0. destruct (eqb_stringP x0 x); subst; simpl.
-    + econstructor. apply H10. auto. 
-      rewrite update_permute in H12.
-      rewrite update_shadow in H12.
-      rewrite update_permute in H12. auto. auto. auto.
+    + econstructor...
+      rewrite update_permute in H12...
+      rewrite update_shadow in H12...
+      rewrite update_permute in H12...
     + destruct (eqb_stringP x0 k); subst.
-      * econstructor. apply H10. auto. 
-        rewrite update_shadow in H12. auto.
-      * econstructor. apply H10. auto. eapply H.
-        rewrite update_permute. rewrite update_permute with (x1 := x0). apply H12.
-        auto. auto. auto. 
+      * econstructor... rewrite update_shadow in H12...
+      * econstructor... eapply H...
+        rewrite update_permute... 
+        rewrite update_permute with (x1 := x0)...
 Qed.
+
+Search inclusion.
+
+Lemma inclusion_empty_in_any : forall (A : Type) (m : partial_map A), inclusion empty m.
+Proof.
+  unfold inclusion.
+  intros. inversion H. 
+Qed.
+
+Theorem preservation : forall E c c' T,
+  E \ empty ||- c \in T  ->
+  E \ c --> c'  ->
+  E \ empty ||- c' \in T.
+Proof with eauto using inclusion_empty_in_any.
+  intros E c c' T HT.
+  remember empty as Gamma.
+  generalize dependent c'.
+  induction HT; intros; subst.
+  - inversion H1. subst. inversion H. subst. 
+    eapply substitution_preserves_typing ...
+  - inversion H0; subst ...
+  - inversion H0.
+  - inversion H2.
+  - inversion H; subst.
+    + eapply T_Do ...
+    + inversion HT1. eapply substitution_preserves_typing ...
+    + inversion HT1. subst. eapply T_Op; subst ...
+      eapply T_Do ...
+      destruct (eqb_stringP x y); subst.
+      * rewrite update_shadow...
+      * apply weakening_computation with (Gamma := (x |-> T1))...
+        unfold inclusion. intros. destruct (eqb_stringP x x0); subst.
+        -- rewrite update_eq in H0. rewrite update_eq...
+        -- rewrite update_neq in H0... inversion H0.
+  - inversion H0; subst.
+    + econstructor...
+    + inversion H. subst. eapply substitution_preserves_typing...
+      inversion HT...
+    + inversion H. inversion HT. inversion H10. subst.
+      eapply substitution_preserves_typing...
+      * eapply substitution_preserves_typing... 
+        rewrite H18 in H31. injection H31 as H31. subst...
+      * rewrite H31. rewrite H18 in H31. injection H31 as H31. simpl. 
+        subst. constructor. econstructor.
+        -- apply H22.
+        -- apply weakening with (Gamma := empty)...
+   + inversion H. inversion HT. subst. econstructor...
+     econstructor... apply weakening with (Gamma := empty)...
+Qed.
+
