@@ -132,7 +132,7 @@ Reserved Notation "E '\' Gamma '|-' v '\in' T" (at level 40).
 
 
 Definition set_remove (x : string) (s : uniset string) :=
-  Charac (fun y:string => if eqb_string x y then false else (charac s x)).
+  Charac (fun y:string => if eqb_string x y then false else (charac s y)).
 
 Inductive has_type : total_map (valueType * valueType) -> context -> computation -> computationType -> Prop :=
   | T_App : forall E T1 T2 Gamma v1 v2,
@@ -151,12 +151,12 @@ Inductive has_type : total_map (valueType * valueType) -> context -> computation
       E op = (T1, T2) ->
       E \ Gamma |- v \in T1 ->
       In Delta op ->
-      E \ y |-> T2 ; Gamma ||- c \in T ->
-      E \ Gamma ||- COp op v y c \in T
+      E \ y |-> T2 ; Gamma ||- c \in (ComputationType T Delta) ->
+      E \ Gamma ||- COp op v y c \in (ComputationType T Delta)
    | T_Do : forall E x c1 c2 T1 T Gamma Delta,
       E \ Gamma ||- c1 \in (ComputationType T1 Delta) ->
-      E \ x |-> T1 ; Gamma ||- c2 \in T ->
-      E \ Gamma ||- CDo x c1 c2 \in T
+      E \ x |-> T1 ; Gamma ||- c2 \in (ComputationType T Delta) ->
+      E \ Gamma ||- CDo x c1 c2 \in (ComputationType T Delta)
    | T_Handle : forall E T1 T2 h c Gamma,
       E \ Gamma ||- c \in T1 ->
       E \ Gamma |- h \in (HandlerType T1 T2) ->
