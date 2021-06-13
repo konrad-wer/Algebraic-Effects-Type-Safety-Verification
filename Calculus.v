@@ -175,19 +175,20 @@ with has_type_valueExpr : total_map (valueType * valueType) -> context -> valueE
   | T_Fun : forall E Gamma x T1 T2 c,
       E \ x |-> T2 ; Gamma ||- c \in T1 ->
       E \ Gamma |- VFun x T2 c \in (FunType T2 T1)
-  | T_Handler : forall E xr cr op x k c A B Gamma Delta Delta',
+  | T_Handler : forall E xr cr op opCase A B Gamma Delta Delta',
       E \ xr |-> A ; Gamma ||- cr \in (ComputationType B Delta') ->
-      has_type_opCase E Gamma (OpCase op x k c) (ComputationType B Delta') ->
+      has_type_opCase E Gamma op opCase (ComputationType B Delta') ->
       incl (set_remove op Delta) Delta' ->
-      E \ Gamma |- VHandler xr cr (OpCase op x k c) \in 
+      E \ Gamma |- VHandler xr cr opCase \in 
         (HandlerType (ComputationType A Delta) (ComputationType B Delta'))
 
 where "E '\' Gamma '|-' v '\in' T" := (has_type_valueExpr E Gamma v T)
 
-with has_type_opCase : total_map (valueType * valueType) -> context -> opCase -> computationType -> Prop :=
+with has_type_opCase : total_map (valueType * valueType) -> context -> string -> opCase -> computationType -> Prop :=
   | T_OpCase : forall E x op k T1 T2 T Gamma c,
       E op = (T1, T2) ->
+      x <> k ->
       E \ x |-> T1 ; k |-> FunType T2 T ; Gamma ||- c \in T ->
-      has_type_opCase E Gamma (OpCase op x k c) T.
+      has_type_opCase E Gamma op (OpCase op x k c) T.
 
 End Calculus.
