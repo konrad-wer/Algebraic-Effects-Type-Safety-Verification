@@ -25,10 +25,12 @@ with value : Type :=
   | VTrue
   | VFalse
   | VFun (x : string) (t : valueType) (body : computation)
+  (* Small simplification: handler handles only one op *)
   | VHandler (x : string) (cr : computation) (op : opCase)
 with opCase : Type :=
   | OpCase (op : string) (x : string) (k : string) (e : computation).
 
+(* Schemes for mutual induction on computations, values and op cases *)
 Scheme computation_mut := Induction for computation Sort Prop
 with value_mut := Induction for value Sort Prop
 with opCase_mut := Induction for opCase Sort Prop.
@@ -108,12 +110,14 @@ Inductive step : total_map (valueType * valueType) -> computation -> computation
 
 where "E '\' t '-->' t'" := (step E t t').
 
+Hint Constructors step : core.
+
 Definition context := partial_map valueType.
 
+(* computation c has type T in the type context Gamma and the effect signature E *)
 Reserved Notation "E '\' Gamma '||-' c '\in' T" (at level 40).
-
+(* value v has type T in the type context Gamma and the effect signature E *)
 Reserved Notation "E '\' Gamma '|-' v '\in' T" (at level 40).
-
 
 Definition set_remove (x : string) (s : uniset string) :=
   Charac (fun y:string => if eqb_string x y then false else (charac s y)).
@@ -174,5 +178,9 @@ with has_type_opCase : total_map (valueType * valueType) -> context -> string ->
       x <> k ->
       E \ x |-> T1 ; k |-> FunType T2 T ; Gamma ||- c \in T ->
       has_type_opCase E Gamma op (OpCase op x k c) T.
+
+Hint Constructors has_type : core.
+Hint Constructors has_type_value : core.
+Hint Constructors has_type_opCase : core.
 
 End Calculus.
