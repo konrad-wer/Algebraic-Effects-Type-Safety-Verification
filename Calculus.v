@@ -1,11 +1,21 @@
+(* Coq formalization of the type safety theorem for the calculus from
+   "An Introduction to Algebraic Effects and Handlers" by Matija Pretnar
+   https://www.sciencedirect.com/science/article/pii/S1571066115000705). *)
+
 Set Warnings "-notation-overridden,-parsing".
 From Coq Require Import Strings.String.
 From AlgEffects Require Import Maps.
 From Coq Require Import Bool.Bool.
+(* Representation of sets as characteristic functions. *)
 From Coq Require Import Sets.Uniset.
 
 Module Calculus.
 
+(* This module contains syntaxes for types, computations and values,
+   typing judgement and  definition of small step semantics
+   in form of the step relation. *)
+
+(* Fig. 5. Syntax of types *)
 Inductive computationType : Type :=
   | ComputationType : valueType -> uniset string -> computationType
 with valueType : Type :=
@@ -13,6 +23,7 @@ with valueType : Type :=
   | FunType : valueType -> computationType -> valueType
   | HandlerType : computationType -> computationType -> valueType.
 
+(* Fig. 1. Syntax of terms *)
 Inductive computation : Type :=
   | CReturn (v : value)
   | COp (op : string) (v : value) (x : string) (c : computation)
@@ -24,13 +35,15 @@ with value : Type :=
   | VVar (x : string)
   | VTrue
   | VFalse
+  (* Similarly to STLC chapter in software foundations we provide
+     explicit type for the function parameter. *)
   | VFun (x : string) (t : valueType) (body : computation)
-  (* Small simplification: handler handles only one op *)
+  (* Small simplification: handler handles only one op. *)
   | VHandler (x : string) (cr : computation) (op : opCase)
 with opCase : Type :=
   | OpCase (op : string) (x : string) (k : string) (e : computation).
 
-(* Schemes for mutual induction on computations, values and op cases *)
+(* Schemes for mutual induction on computations, values and op cases. *)
 Scheme computation_mut := Induction for computation Sort Prop
 with value_mut := Induction for value Sort Prop
 with opCase_mut := Induction for opCase Sort Prop.
@@ -39,12 +52,12 @@ Fixpoint subst
   (x : string) (s : value) (t : computation) :=
   match t with
   | CReturn v => CReturn (subst_in_value x s v)
-  | COp op v y c => 
+  | COp op v y c =>
       if eqb_string x y then
         COp op (subst_in_value x s v) y c
       else
         COp op (subst_in_value x s v) y (subst x s c)
-  | CDo y c1 c2 => 
+  | CDo y c1 c2 =>
       if eqb_string x y then
         CDo y (subst x s c1) c2
       else
@@ -58,8 +71,8 @@ with subst_in_value (x : string) (s : value) (t : value) :=
   | VVar y => if eqb_string x y then s else t
   | VTrue => VTrue
   | VFalse => VFalse
-  | VFun y T body => 
-    if eqb_string x y then 
+  | VFun y T body =>
+    if eqb_string x y then
       t
     else
       (VFun y T (subst x s body))
@@ -71,14 +84,17 @@ with subst_in_value (x : string) (s : value) (t : value) :=
   end
 with subst_in_opCase (x : string) (s : value) (t : opCase) :=
   match t with
-  | OpCase op y k e => 
+  | OpCase op y k e =>
     if eqb_string x y || eqb_string x k then
        OpCase op y k e
     else
        OpCase op y k (subst x s e)
   end.
 
-Reserved Notation "E '\' t '-->' t'" (at level 40).
+(* Fig. 3. Step relation *)
+
+(* Computation c makes the step to c' in the effect signature E. *)
+Reserved Notation "E '\' c '-->' c'" (at level 40).
 
 Inductive step : total_map (valueType * valueType) -> computation -> computation -> Prop :=
   | ST_AppAbs : forall E x T2 c v2,
@@ -112,15 +128,18 @@ where "E '\' t '-->' t'" := (step E t t').
 
 Hint Constructors step : core.
 
-Definition context := partial_map valueType.
-
-(* computation c has type T in the type context Gamma and the effect signature E *)
-Reserved Notation "E '\' Gamma '||-' c '\in' T" (at level 40).
-(* value v has type T in the type context Gamma and the effect signature E *)
-Reserved Notation "E '\' Gamma '|-' v '\in' T" (at level 40).
-
+(* Set remove function used in the typing rule for handler. *)
 Definition set_remove (x : string) (s : uniset string) :=
   Charac (fun y:string => if eqb_string x y then false else (charac s y)).
+
+Definition context := partial_map valueType.
+
+(* Fig. 6. Typing judgments *)
+
+(* Computation c has type T in the type context Gamma and the effect signature E. *)
+Reserved Notation "E '\' Gamma '||-' c '\in' T" (at level 40).
+(* Value v has type T in the type context Gamma and the effect signature E. *)
+Reserved Notation "E '\' Gamma '|-' v '\in' T" (at level 40).
 
 Inductive has_type : total_map (valueType * valueType) -> context -> computation -> computationType -> Prop :=
   | T_App : forall E T1 T2 Gamma v1 v2,
@@ -167,7 +186,7 @@ with has_type_value : total_map (valueType * valueType) -> context -> value -> v
       E \ xr |-> A ; Gamma ||- cr \in (ComputationType B Delta') ->
       has_type_opCase E Gamma op opCase (ComputationType B Delta') ->
       incl (set_remove op Delta) Delta' ->
-      E \ Gamma |- VHandler xr cr opCase \in 
+      E \ Gamma |- VHandler xr cr opCase \in
         (HandlerType (ComputationType A Delta) (ComputationType B Delta'))
 
 where "E '\' Gamma '|-' v '\in' T" := (has_type_value E Gamma v T)

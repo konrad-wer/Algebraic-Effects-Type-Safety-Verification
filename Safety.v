@@ -1,11 +1,23 @@
+(* Coq formalization of the type safety theorem for the calculus from
+   "An Introduction to Algebraic Effects and Handlers" by Matija Pretnar
+   https://www.sciencedirect.com/science/article/pii/S1571066115000705). *)
+
 From Coq Require Import Strings.String.
 From AlgEffects Require Import Maps.
 From Coq Require Import Bool.Bool.
 From Coq Require Import Sets.Uniset.
 From AlgEffects Require Import Calculus.
 
+Module Safety.
+
+(* This module contains proof of the type-safety theorem using a standard
+   technique of progress and preservation. To be able to proof the preservation
+   theorem we also need weakening and substitution lemmas. *)
+
 Import Calculus.
 
+(* Canonical forms lemmas, though not used in later proofs, they serve
+   as a good sanity checks for our definitions. *)
 Lemma canonical_forms_bool : forall E v,
   E \ empty |- v \in BoolType ->
   v = VTrue \/ v = VFalse.
@@ -35,7 +47,9 @@ Proof with eauto.
   - inversion H0.
 Qed.
 
-Ltac solve_by_invertion :=
+(* Tactics that try to find definition for inversion
+   and then try to proceed with eauto / eauto using. *)
+Ltac solve_by_inversion :=
   match goal with | H : ?T |- _ =>
   match type of T with Prop =>
     solve [
@@ -43,7 +57,7 @@ Ltac solve_by_invertion :=
       subst; try discriminate; eauto]
   end end.
 
-Ltac solve_by_invertion_with t :=
+Ltac solve_by_inversion_with t :=
   match goal with | H : ?T |- _ =>
   match type of T with Prop =>
     solve [
@@ -51,6 +65,12 @@ Ltac solve_by_invertion_with t :=
       subst; try discriminate; eauto using t ]
   end end.
 
+(* Progress.
+   if computation c is well typed in the empty context then either:
+   - c = return v
+   - c = op v y c'
+   - c --> c'
+*)
 Theorem progress : forall E c T,
   E \ empty ||- c \in T ->
   (exists v, c = CReturn v) \/
@@ -59,9 +79,9 @@ Theorem progress : forall E c T,
 Proof with eauto.
   intros E C T Ht.
   remember empty as Gamma.
-  induction Ht; subst Gamma; try solve_by_invertion...
+  induction Ht; subst Gamma; try solve_by_inversion...
   - inversion H0; subst; try discriminate; right; left...
-  - destruct IHHt1; subst; try reflexivity; right; right.
+  - destruct IHHt1; subst; try reflexivity; right; right...
     + destruct H as [v H]. subst...
     + destruct H.
       * destruct H as (op & v & y & c' & H). subst...
@@ -79,6 +99,7 @@ Lemma weakening : forall v E Gamma Gamma' T,
   E \ Gamma  |- v \in T  ->
   E \ Gamma' |- v \in T.
 Proof with eauto.
+  (* We use mutual induction scheme for computations, values and op branches. *)
   apply (value_mut (fun c => forall E Gamma Gamma' T,
       inclusion Gamma Gamma' ->
       E \ Gamma  ||- c \in T  ->
@@ -90,9 +111,9 @@ Proof with eauto.
     (fun opCase => forall E Gamma Gamma' op T,
       inclusion Gamma Gamma' ->
       has_type_opCase E Gamma op opCase T ->
-      has_type_opCase E Gamma' op opCase T)); 
- 
-    intros; solve_by_invertion_with inclusion_update.
+      has_type_opCase E Gamma' op opCase T));
+    (* All cases solved smoothly with simple automation. *)
+    intros; solve_by_inversion_with inclusion_update.
 Qed.
 
 Lemma weakening_empty : forall E Gamma v T,
@@ -114,11 +135,22 @@ Proof with eauto using weakening, inclusion_update.
   induction Ht; intros; subst...
 Qed.
 
+(* Abstracting most repetitive part from substitution lemma proof. *)
+Ltac solve_simple_env_update x y :=
+  match goal with | H : ?T |- _ =>
+  match type of T with Prop =>
+    solve [
+      destruct (eqb_stringP x y); subst; eauto
+       + rewrite update_shadow in H; eauto
+       + rewrite update_permute in H; eauto ]
+  end end.
+
 Lemma substitution_preserves_typing : forall c E Gamma x U v T,
   E \ x |-> U ; Gamma ||- c \in T ->
   E \ empty |- v \in U   ->
   E \ Gamma ||- subst x v c \in T.
 Proof with eauto using weakening_empty.
+   (* Again we use mutual induction scheme. *)
    apply (computation_mut (fun c => forall E Gamma x U v T,
       E \ x |-> U ; Gamma ||- c \in T ->
       E \ empty |- v \in U   ->
@@ -130,25 +162,15 @@ Proof with eauto using weakening_empty.
     (fun opCase => forall E Gamma x U v op T,
       has_type_opCase E (x |-> U ; Gamma) op opCase T ->
       E \ empty |- v \in U   ->
-      has_type_opCase E Gamma op (subst_in_opCase x v opCase) T)); 
+      has_type_opCase E Gamma op (subst_in_opCase x v opCase) T));
 
-  intros; subst; simpl; try solve_by_invertion.
-  - inversion H1. subst. destruct (eqb_stringP x0 x)...
-    + eapply T_Op... subst. rewrite update_shadow in H13...
-    + eapply T_Op... rewrite update_permute in H13...
-  - inversion H1. destruct (eqb_stringP x0 x); subst... 
-    + eapply T_Do. eapply H in H9... rewrite update_shadow in H10...
-    + eapply T_Do... rewrite update_permute in H10...
+  intros; subst; simpl; try solve_by_inversion;
+  try (inversion H1; solve_simple_env_update x0 x).
   - inversion H. destruct (eqb_stringP x0 x); subst...
-    + apply weakening_empty. rewrite update_eq in H4. 
+    + apply weakening_empty. rewrite update_eq in H4.
       injection H4 as H4. subst...
     + rewrite update_neq in H4...
-  - inversion H0. destruct (eqb_stringP x0 x); subst...
-    + rewrite update_shadow in H8...
-    + rewrite update_permute in H8...
-  - inversion H1. destruct (eqb_stringP x0 x); subst...
-    + rewrite update_shadow in H8...
-    + rewrite update_permute in H8...
+  - inversion H0. solve_simple_env_update x0 x.
   - inversion H0. destruct (eqb_stringP x0 x); subst; simpl.
     + econstructor...
       rewrite update_permute in H12...
@@ -157,10 +179,11 @@ Proof with eauto using weakening_empty.
     + destruct (eqb_stringP x0 k); subst.
       * econstructor... rewrite update_shadow in H12...
       * econstructor... eapply H...
-        rewrite update_permute... 
+        rewrite update_permute...
         rewrite update_permute with (x1 := x0)...
 Qed.
 
+(* Two simple lemmas about maps and sets. *)
 Lemma inclusion_empty_in_any : forall (A : Type) (m : partial_map A), inclusion empty m.
 Proof.
   unfold inclusion.
@@ -181,21 +204,22 @@ Proof with eauto.
   - rewrite -> H0 in H1. inversion H1...
 Qed.
 
+(* Preservation.
+   if c has type T and c --> c' then c' also has type T.
+*)
 Theorem preservation : forall E c c' T,
   E \ empty ||- c \in T  ->
   E \ c --> c'  ->
   E \ empty ||- c' \in T.
-Proof with eauto using inclusion_empty_in_any.
+Proof with eauto using inclusion_empty_in_any, substitution_preserves_typing.
   intros E c c' T HT.
   remember empty as Gamma.
   generalize dependent c'.
-  induction HT; intros; subst; 
-  try solve_by_invertion_with inclusion_empty_in_any.
-  - inversion H1. subst. inversion H. subst. 
-    eapply substitution_preserves_typing ...
-  - inversion H; subst...
-    + inversion HT1. eapply substitution_preserves_typing ...
-    + inversion HT1. subst. eapply T_Op; subst... eapply T_Do ...
+  induction HT; intros; subst;
+  try solve_by_inversion_with inclusion_empty_in_any.
+  - inversion H1. subst. inversion H. subst...
+  - inversion H; subst; inversion HT1; subst...
+    + eapply T_Op; subst... eapply T_Do ...
       destruct (eqb_stringP x y); subst.
       * rewrite update_shadow...
       * apply weakening_computation with (Gamma := (x |-> T1))...
@@ -209,30 +233,42 @@ Proof with eauto using inclusion_empty_in_any.
       eapply substitution_preserves_typing...
       * eapply substitution_preserves_typing...
         rewrite H17 in H30. injection H30 as H30. subst...
-      * rewrite H30. rewrite H17 in H30. injection H30 as H30. simpl. 
+      * rewrite H30. rewrite H17 in H30. injection H30 as H30. simpl.
         subst. constructor. econstructor...
         injection H18 as H18. subst. apply weakening with (Gamma := empty)...
-   + inversion H. subst. inversion HT. subst. inversion H10. subst. 
+   + inversion H. subst. inversion HT. subst. inversion H10. subst.
       econstructor...
      * eapply set_remove_neq_incl...
      * econstructor... apply weakening with (Gamma := empty)...
 Qed.
 
+(* Theorem 4.2 (Safety).
+   if c has type T!Delta in the empty context then either:
+   - c = return v, and v has type T
+   - c = op v y c', and op belongs to Delta
+   - c --> c', and c' has type T!Delta
+*)
 Corollary safety : forall E c T Delta,
   E \ empty ||- c \in ComputationType T Delta ->
   (exists v, c = CReturn v /\ E \ empty |- v \in T) \/
   (exists op v y c', c = COp op v y c' /\ In Delta op) \/
   (exists c', E \ c --> c' /\ E \ empty ||- c' \in ComputationType T Delta).
 Proof with eauto 7.
-  intros. apply progress in H as H'. destruct H' as [[v H1] | H23]; 
+  (* By using progress and preservation proof proceeds without any problems. *)
+  intros. apply progress in H as H'. destruct H' as [[v H1] | H23];
   try destruct H23 as [H2 | H3].
   - left. exists v. subst. inversion H. subst...
-  - right. left. destruct H2 as (op & v & y & c' & H2). subst. inversion H. 
+  - right. left. destruct H2 as (op & v & y & c' & H2). subst. inversion H.
     subst...
   - right. right. destruct H3 as [c' H3]. exists c'. split...
     eapply preservation...
 Qed.
 
+(* Simple corollary from the above theorem.
+   if c has type T!{} in the empty context then either:
+   - c = return v, and v has type T
+   - c --> c', and c' has type T!{}
+*)
 Corollary safety_pure : forall E c T,
   E \ empty ||- c \in ComputationType T (Emptyset string) ->
   (exists v, c = CReturn v /\ E \ empty |- v \in T) \/
@@ -244,3 +280,5 @@ Proof with eauto 7.
     + destruct H as (op & _ & _ & _ & _ & H). inversion H.
     + right ...
 Qed.
+
+End Safety.
